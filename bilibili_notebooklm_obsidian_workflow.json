@@ -1,10 +1,10 @@
 {
-  "name": "B站长视频 ➔ 投喂官方 NotebookLM ➔ 自动收割至 Obsidian (柏雯博)",
+  "name": "B站长视频 ➔ 自动直传 Google Drive (NotebookLM) ➔ 自动收割至 Obsidian (柏雯博)",
   "nodes": [
     {
       "parameters": {},
       "id": "1",
-      "name": "手动触发 / 定时调度",
+      "name": "⏱️ 手动触发 / 定时调度",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
@@ -17,74 +17,49 @@
         "command": "C:\\Users\\ChangBai\\AppData\\Local\\Programs\\Python\\Python312\\python.exe \"c:\\Users\\ChangBai\\Desktop\\新建文件夹\\notebooklm_source_packer.py\" 0"
       },
       "id": "2",
-      "name": "1. 提取B站最新视频字幕并打包",
+      "name": "1. 提取字幕并直传 Google Drive (G盘)",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        440,
+        460,
         300
       ],
       "notesInFlow": true,
-      "notes": "调用本地脚本，1秒提取B站官方字幕，并写入 D:\\柏雯博-数据\\notebooklm_sources"
-    },
-    {
-      "parameters": {
-        "operation": "upload",
-        "fileContent": "data",
-        "name": "={{ $json.fileName }}",
-        "parents": [
-          "root"
-        ]
-      },
-      "id": "3",
-      "name": "2. 云端直传: Google Drive (可选)",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 2,
-      "position": [
-        700,
-        200
-      ],
-      "notesInFlow": true,
-      "notes": "（选填）在 n8n 中绑定 Google 账号，文件将直传到 Google Drive 供 NotebookLM 网页直接点击添加"
+      "notes": "自动秒级抓取B站原生字幕，同时写入本地 D:\\柏雯博-数据 与 Google Drive (G:\\我的云端硬盘\\NotebookLM_Sources)"
     },
     {
       "parameters": {
         "command": "C:\\Users\\ChangBai\\AppData\\Local\\Programs\\Python\\Python312\\python.exe \"c:\\Users\\ChangBai\\Desktop\\新建文件夹\\notebooklm_vault_harvester.py\""
       },
-      "id": "4",
-      "name": "3. 自动收割: 规范落盘入库 Obsidian",
+      "id": "3",
+      "name": "2. 自动收割: 规范落盘入库 Obsidian",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        700,
-        420
+        720,
+        300
       ],
       "notesInFlow": true,
       "notes": "严格按照 AGENTS.md 规范自动生成带 [[双链]] 的笔记，并更新 30 资源库_索引.md"
     }
   ],
   "connections": {
-    "手动触发 / 定时调度": {
+    "⏱️ 手动触发 / 定时调度": {
       "main": [
         [
           {
-            "node": "1. 提取B站最新视频字幕并打包",
+            "node": "1. 提取字幕并直传 Google Drive (G盘)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "1. 提取B站最新视频字幕并打包": {
+    "1. 提取字幕并直传 Google Drive (G盘)": {
       "main": [
         [
           {
-            "node": "2. 云端直传: Google Drive (可选)",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "3. 自动收割: 规范落盘入库 Obsidian",
+            "node": "2. 自动收割: 规范落盘入库 Obsidian",
             "type": "main",
             "index": 0
           }

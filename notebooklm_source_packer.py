@@ -136,6 +136,19 @@ class NotebookLMSourcePacker:
 
         print(f"🎉 NotebookLM 专属源文件已生成！")
         print(f"📁 本地保存路径: {out_path}")
+
+        # 自动直传到本地挂载的 Google Drive (G 盘)
+        gdrive_dir = "G:\\我的云端硬盘\\NotebookLM_Sources"
+        if os.path.exists("G:\\我的云端硬盘"):
+            try:
+                os.makedirs(gdrive_dir, exist_ok=True)
+                gdrive_path = os.path.join(gdrive_dir, f"{clean_name}.md")
+                with open(gdrive_path, "w", encoding="utf-8") as gf:
+                    gf.write(doc_content)
+                print(f"☁️ 已自动同步至 Google Drive: {gdrive_path}")
+            except Exception as ge:
+                print(f"⚠️ 同步至 G 盘失败: {ge}")
+
         return out_path
 
     def process_folder(self, folder_index: int = 0, limit: int = 5) -> List[str]:
