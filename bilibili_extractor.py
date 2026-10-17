@@ -1,7 +1,9 @@
 import re
+import os
 import requests
 import json
 from typing import Dict, Any, Optional, List
+from bilibili_user_sync import COOKIE_FILE
 
 class BilibiliExtractor:
     """B站视频信息与字幕/音频提取器"""
@@ -11,6 +13,18 @@ class BilibiliExtractor:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://www.bilibili.com"
         }
+        self._load_cookie_headers()
+
+    def _load_cookie_headers(self):
+        if os.path.exists(COOKIE_FILE):
+            try:
+                with open(COOKIE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    cookies = data.get("cookies", {})
+                    if cookies:
+                        self.headers["Cookie"] = "; ".join([f"{k}={v}" for k, v in cookies.items()])
+            except Exception:
+                pass
 
     def extract_bvid(self, text: str) -> Optional[str]:
         """从URL或文本中提取BV号"""
