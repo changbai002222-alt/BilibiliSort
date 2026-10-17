@@ -1,0 +1,29 @@
+{
+  "categories": [
+    {
+      "name": "🧠 生产力与第二大脑",
+      "description": "obsidian 插件 笔记 同步 知识管理 效率 工具 思维导图 快捷指令 备忘 工作流"
+    },
+    {
+      "name": "🤖 AI前沿与智能体",
+      "description": "ai 人工智能 大模型 n8n 自动化 智能体 openrouter 算力 提示词 deepseek agent 科技"
+    },
+    {
+      "name": "💻 编程与软硬件开发",
+      "description": "编程 全栈 前端 后端 开发 stm32 单片机 硬件 物联网 嵌入式 源码 代码 教程 算法"
+    },
+    {
+      "name": "📊 财经宏观与商业思考",
+      "description": "财经 经济 宏观 化债 存款 金融 投资 商业 理财 市场 股票 大国大城 资产"
+    },
+    {
+      "name": "📚 读书认知与个人成长",
+      "description": "读书 乔布斯 传记 博弈论 认知 思考 书籍 播客 内卷 自我提升 心理 哲学 社科"
+    },
+    {
+      "name": "🎬 影音生活与娱乐休闲",
+      "description": "电影 音乐 mv 搞笑 娱乐 动漫 游戏 歌曲 日常 vlog"
+    }
+  ],
+  "default_category": "📚 综合知识与备忘"
+}
