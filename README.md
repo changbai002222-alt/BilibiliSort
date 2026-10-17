@@ -7,7 +7,7 @@
 ### 让杂乱无章的 B 站收藏夹一键重获新生 🚀
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-red.svg)](LICENSE)
 [![GUI](https://img.shields.io/badge/GUI-CustomTkinter-pink.svg)](https://github.com/TomSchimansky/CustomTkinter)
 [![Model](https://img.shields.io/badge/AI-DeepSeek-green.svg)](https://www.deepseek.com/)
 
@@ -94,6 +94,10 @@ flowchart TD
 
 ---
 
-## 📄 开源许可证
+## 📄 开源许可证与协议
 
-本项目采用 [MIT License](LICENSE) 开源许可证。
+本项目采用 **[Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE)** 协议开源：
+
+- ✅ **自由使用与学习**：允许个人、学生、开发者免费使用、阅读源码、分享或按需修改。
+- ❌ **严禁商业化牟利**：**严禁任何个人或组织将本项目（包括源码及打包生成的二进制可执行程序）用于任何形式的商业盈利、有偿代部署、二次包装转卖（包括但不限于闲鱼、淘宝、微信社群等渠道）**。
+- 🏷️ **署名要求**：修改或转载使用时，请保留原作者（ChangBai）的版权署名与项目源地址。
