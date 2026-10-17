@@ -185,17 +185,91 @@ class NotebookLMSourcePacker:
         if os.path.exists(NOTEBOOKLM_SOURCES_DIR):
             os.startfile(NOTEBOOKLM_SOURCES_DIR)
 
+PROCESSED_BVIDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "processed_bvids.json")
+
+def load_processed_bvids() -> List[str]:
+    if os.path.exists(PROCESSED_BVIDS_FILE):
+        try:
+            with open(PROCESSED_BVIDS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_processed_bvids(bvids: List[str]):
+    try:
+        with open(PROCESSED_BVIDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(bvids, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def sync_new_favorites(limit: int = 10) -> List[Dict[str, Any]]:
+    """增量监听最新收藏：全自动对比并只处理最新收藏的新视频"""
+    packer = NotebookLMSourcePacker()
+    if not packer.user_sync.check_login():
+        print("尚未登录，无法监听收藏夹")
+        return []
+
+    folders = packer.user_sync.get_favorite_folders()
+    if not folders:
+        return []
+
+    default_f = folders[0]
+    videos = packer.user_sync.get_favorite_videos(default_f["id"], page_size=limit)
+    processed = load_processed_bvids()
+
+    new_results = []
+    for v in videos:
+        bvid = v["bvid"]
+        if bvid in processed:
+            continue
+
+        print(f"\n=======================================================")
+        print(f"✨ 监听到新收藏视频: 【{v['title']}】 ({bvid})")
+        src_path = packer.process_bilibili_video(bvid)
+        if src_path:
+            # 自动收割进 Obsidian 资源库
+            try:
+                from notebooklm_vault_harvester import NotebookLMVaultHarvester
+                harvester = NotebookLMVaultHarvester()
+                with open(src_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                note_path = harvester.harvest(
+                    raw_text=content,
+                    title=v["title"],
+                    source_url=f"https://www.bilibili.com/video/{bvid}",
+                    summary_desc=f"{v.get('owner', '')} 视频整理"
+                )
+                print(f"✅ 已全自动落盘入库 Obsidian: {note_path}")
+            except Exception as he:
+                print(f"⚠️ 自动收割 Obsidian 异常: {he}")
+
+            processed.append(bvid)
+            new_results.append({
+                "bvid": bvid,
+                "title": v["title"],
+                "source_path": src_path
+            })
+            time.sleep(1)
+
+    save_processed_bvids(processed)
+    if not new_results:
+        print("ℹ️ 暂无新的未处理收藏视频")
+    else:
+        print(f"\n🎉 增量处理完毕，本次新增处理 {len(new_results)} 个视频！")
+    return new_results
+
 if __name__ == "__main__":
     packer = NotebookLMSourcePacker()
     if len(sys.argv) > 1:
         target = sys.argv[1]
-        if "BV" in target or "bilibili" in target:
+        if target == "--auto" or target == "-a":
+            sync_new_favorites(limit=10)
+        elif "BV" in target or "bilibili" in target:
             packer.process_bilibili_video(target)
             packer.open_export_folder()
         elif target.isdigit():
             packer.process_folder(folder_index=int(target), limit=3)
             packer.open_export_folder()
     else:
-        print("💡 用法示例：")
-        print("1. 转换单个视频: python notebooklm_source_packer.py BV1xx411c7X")
-        print("2. 转换收藏夹前3个: python notebooklm_source_packer.py 0")
+        sync_new_favorites(limit=10)
