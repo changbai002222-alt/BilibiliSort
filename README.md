@@ -65,8 +65,8 @@ flowchart TD
 
 1. **克隆项目到本地**：
    ```bash
-   git clone https://github.com/your-username/BiliSort.git
-   cd BiliSort
+   git clone https://github.com/changbai002222-alt/BilibiliSort.git
+   cd BilibiliSort
    ```
 
 2. **安装依赖**：
