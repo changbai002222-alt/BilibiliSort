@@ -14,7 +14,7 @@ if sys.platform.startswith("win"):
         pass
 
 VAULT_ROOT = "D:\\柏雯博"
-INBOX_DIR = os.path.join(VAULT_ROOT, "00 Inbox", "Clippings")
+INBOX_DIR = os.path.join(VAULT_ROOT, "00 Inbox")
 RESOURCE_DIR = os.path.join(VAULT_ROOT, "30 资源库", "07 外部资料")
 ATTACHMENTS_DIR = os.path.join(VAULT_ROOT, "_附件")
 
@@ -76,7 +76,7 @@ class NotebookLMVaultHarvester:
         title: str, 
         source_url: str = "", 
         audio_file_path: Optional[str] = None,
-        target_vault: str = "resource", # "resource" 或 "inbox"
+        target_vault: str = "inbox", # 默认直接进入 00 Inbox 作为待整理收集箱
         summary_desc: str = "NotebookLM 官方深度研读整理"
     ) -> str:
         """
@@ -126,7 +126,7 @@ tags:
             index_file = os.path.join(VAULT_ROOT, "30 资源库", "30 资源库_索引.md")
         else:
             dest_dir = INBOX_DIR
-            out_file = os.path.join(dest_dir, f"{today}_{clean_title}.md")
+            out_file = os.path.join(dest_dir, f"{clean_title}.md")
             index_file = None
 
         with open(out_file, "w", encoding="utf-8") as f:
