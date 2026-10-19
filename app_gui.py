@@ -213,22 +213,33 @@ class CuteBiliSortApp(ctk.CTk):
             corner_radius=10, fg_color=CARD_INNER, border_color="#363242",
             button_color=THEME_BLUE, button_hover_color=THEME_BLUE_HOVER
         )
-        self.folder_combo.grid(row=7, column=0, padx=15, pady=(2, 8), sticky="ew")
+        self.folder_combo.grid(row=7, column=0, padx=15, pady=(2, 6), sticky="ew")
+
+        # 全量整理勾选框
+        self.all_vids_var = tk.BooleanVar(value=False)
+        self.all_vids_cb = ctk.CTkCheckBox(
+            self.sidebar, text="🔥 全量整理 (整个收藏夹全部视频)", 
+            variable=self.all_vids_var,
+            font=ctk.CTkFont(family="Microsoft YaHei", size=12, weight="bold"),
+            fg_color=THEME_PINK, hover_color=THEME_PINK_HOVER,
+            command=self._on_toggle_all_vids
+        )
+        self.all_vids_cb.grid(row=8, column=0, padx=18, pady=(4, 4), sticky="w")
 
         self.count_label = ctk.CTkLabel(
-            self.sidebar, text="整理最近收藏: 30 个", 
+            self.sidebar, text="整理最近收藏: 50 个", 
             font=ctk.CTkFont(family="Microsoft YaHei", size=12),
             text_color="#9B97A8"
         )
-        self.count_label.grid(row=8, column=0, padx=18, pady=(4, 2), sticky="w")
+        self.count_label.grid(row=9, column=0, padx=18, pady=(2, 2), sticky="w")
 
         self.count_slider = ctk.CTkSlider(
-            self.sidebar, from_=5, to=100, number_of_steps=19,
+            self.sidebar, from_=10, to=1500, number_of_steps=149,
             button_color=THEME_PINK, button_hover_color=THEME_PINK_HOVER,
             progress_color=THEME_BLUE, command=self._on_slider_change
         )
-        self.count_slider.set(30)
-        self.count_slider.grid(row=9, column=0, padx=15, pady=(2, 12), sticky="ew")
+        self.count_slider.set(50)
+        self.count_slider.grid(row=10, column=0, padx=15, pady=(2, 12), sticky="ew")
 
         # ================= 2. 右侧主工作区 =================
         self.main_frame = ctk.CTkFrame(self, corner_radius=20, fg_color=CARD_DARK)
@@ -324,6 +335,15 @@ class CuteBiliSortApp(ctk.CTk):
 
     def _on_slider_change(self, value):
         self.count_label.configure(text=f"整理最近收藏: {int(value)} 个")
+
+    def _on_toggle_all_vids(self):
+        if self.all_vids_var.get():
+            self.count_slider.configure(state="disabled")
+            self.count_label.configure(text="整理范围: ⚡ 收藏夹全部视频 (全量扫描)", text_color=THEME_PINK)
+        else:
+            self.count_slider.configure(state="normal")
+            val = int(self.count_slider.get())
+            self.count_label.configure(text=f"整理最近收藏: {val} 个", text_color="#9B97A8")
 
     def _refresh_selected_badges(self):
         """刷新侧边栏已选中的文件夹胶囊列表"""
@@ -922,7 +942,8 @@ class CuteBiliSortApp(ctk.CTk):
             ConfigManager.save_config(cfg)
             self.classifier.reload_config()
 
-        limit = int(self.count_slider.get())
+        is_all = self.all_vids_var.get()
+        limit = 999999 if is_all else int(self.count_slider.get())
         selected_idx = self.folder_combo.cget("values").index(self.folder_combo.get())
         src_folder = self.folders_cache[selected_idx]
 
@@ -930,25 +951,37 @@ class CuteBiliSortApp(ctk.CTk):
         self.sync_btn.configure(state="disabled")
         mode_text = f"🤖 DeepSeek 统筹归类中 ({self.classifier.model})..." if self.classifier.has_llm() else "⚡ 本地多维加权分析中..."
         self.status_tip.configure(text=mode_text, text_color=THEME_BLUE)
-        self.progress_bar.set(0.2)
+        self.progress_bar.set(0.1)
 
         for widget in self.result_scroll.winfo_children():
             widget.destroy()
 
         def run_thread():
             try:
-                self.log(f"开始拉取【{src_folder['title']}】最近 {limit} 个待整理视频...")
+                fetch_desc = "全部视频 (全量扫描)" if is_all else f"最近 {limit} 个待整理视频"
+                self.log(f"开始拉取【{src_folder['title']}】{fetch_desc}...")
                 videos_raw = []
                 page = 1
                 page_size = 20
-                while len(videos_raw) < limit:
-                    cur_ps = min(page_size, limit - len(videos_raw))
+                while True:
+                    if not is_all and len(videos_raw) >= limit:
+                        break
+                    cur_ps = page_size if is_all else min(page_size, limit - len(videos_raw))
                     url = f"https://api.bilibili.com/x/v3/fav/resource/list?media_id={src_folder['id']}&pn={page}&ps={cur_ps}"
-                    resp = self.user_sync.session.get(url, timeout=10).json()
-                    medias = resp.get("data", {}).get("medias", [])
+                    resp = self.user_sync.session.get(url, timeout=12).json()
+                    if resp.get("code") != 0:
+                        self.log(f"⚠️ 拉取第 {page} 页提示: {resp.get('message')}")
+                        break
+                    data = resp.get("data") or {}
+                    medias = data.get("medias") or []
                     if not medias:
                         break
+
+                    has_more = data.get("has_more", False)
                     for m in medias:
+                        # 过滤掉下架或失效的无效条目
+                        if not m.get("id") or m.get("title") == "已失效视频":
+                            continue
                         videos_raw.append({
                             "aid": m.get("id"),
                             "bvid": m.get("bvid"),
@@ -956,17 +989,46 @@ class CuteBiliSortApp(ctk.CTk):
                             "intro": m.get("intro", ""),
                             "owner": m.get("upper", {}).get("name", "")
                         })
-                    if len(medias) < cur_ps:
+                        if not is_all and len(videos_raw) >= limit:
+                            break
+
+                    if page % 5 == 0 or not has_more:
+                        self.log(f"已扫描 {len(videos_raw)} 个有效视频 (已读取至第 {page} 页)...")
+
+                    if not has_more:
                         break
                     page += 1
+                    time.sleep(0.08)
 
                 self.current_videos_raw = videos_raw
                 total = len(videos_raw)
-                self.log(f"成功获取 {total} 个视频元数据，正在批量提取 UP 主精准标签...")
+                if total == 0:
+                    self.log("⚠️ 未获取到任何有效视频，请检查收藏夹或网络！")
+                    self.status_tip.configure(text="⚠️ 收藏夹为空或无有效视频", text_color="#EF4444")
+                    return
+
+                self.log(f"成功获取 {total} 个视频元数据！正在提取特征与标签...")
                 self.progress_bar.set(0.4)
 
-                for v in videos_raw:
-                    v["tags"] = self.folder_manager.get_video_tags(v["aid"])
+                # 优化标签提取：若视频数量很多，进行并发提速并控制最大请求数，避免被B站风控
+                if total <= 60:
+                    for idx, v in enumerate(videos_raw, 1):
+                        v["tags"] = self.folder_manager.get_video_tags(v["aid"])
+                        time.sleep(0.02)
+                else:
+                    from concurrent.futures import ThreadPoolExecutor
+                    self.log(f"视频量较大 ({total}条)，启动并发特征加速提取...")
+                    # 优先为前 120 个视频并发提取详细标签，其余通过标题+简介+UP主多维特征分析
+                    sample_vids = videos_raw[:120]
+                    def fetch_tag(vid_item):
+                        try:
+                            vid_item["tags"] = self.folder_manager.get_video_tags(vid_item["aid"])
+                        except Exception:
+                            vid_item["tags"] = []
+                    with ThreadPoolExecutor(max_workers=5) as executor:
+                        list(executor.map(fetch_tag, sample_vids))
+                    for v in videos_raw[120:]:
+                        v["tags"] = []
 
                 self.progress_bar.set(0.6)
                 if self.classifier.has_llm():

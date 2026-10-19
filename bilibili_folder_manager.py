@@ -93,17 +93,19 @@ class BilibiliFolderManager:
             url = f"https://api.bilibili.com/x/v3/fav/resource/list?media_id={media_id}&pn={page}&ps={page_size}"
             try:
                 resp = self.sync_client.session.get(url, timeout=10).json()
-                medias = resp.get("data", {}).get("medias", [])
+                data = resp.get("data") or {}
+                medias = data.get("medias") or []
                 if not medias:
                     break
                 for m in medias:
                     aid = m.get("id")
-                    if aid and aid not in aids:
+                    if aid and aid not in aids and m.get("title") != "已失效视频":
                         aids.append(aid)
-                if len(medias) < page_size:
+                has_more = data.get("has_more", False)
+                if not has_more:
                     break
                 page += 1
-                time.sleep(0.1)
+                time.sleep(0.08)
             except Exception:
                 break
         return aids
@@ -281,10 +283,13 @@ class BilibiliFolderManager:
             cur_ps = min(page_size, limit - len(videos_raw))
             url = f"https://api.bilibili.com/x/v3/fav/resource/list?media_id={default_folder['id']}&pn={page}&ps={cur_ps}"
             resp = self.sync_client.session.get(url, timeout=10).json()
-            medias = resp.get("data", {}).get("medias", [])
+            data = resp.get("data") or {}
+            medias = data.get("medias") or []
             if not medias:
                 break
             for m in medias:
+                if not m.get("id") or m.get("title") == "已失效视频":
+                    continue
                 videos_raw.append({
                     "aid": m.get("id"),
                     "bvid": m.get("bvid"),
@@ -292,9 +297,13 @@ class BilibiliFolderManager:
                     "intro": m.get("intro", ""),
                     "owner": m.get("upper", {}).get("name", "")
                 })
-            if len(medias) < cur_ps:
+                if len(videos_raw) >= limit:
+                    break
+            has_more = data.get("has_more", False)
+            if not has_more:
                 break
             page += 1
+            time.sleep(0.08)
 
         print(f"成功获取到 {len(videos_raw)} 个待整理视频！正在进行特征提取与分类...\n")
 

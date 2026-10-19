@@ -83,25 +83,18 @@ class DualEngineClassifier:
         except Exception as e:
             return False, f"连接异常: {e}"
 
-    def classify_batch_with_llm(
+    def _classify_single_chunk_llm(
         self,
-        videos: List[Dict[str, Any]],
+        chunk_videos: List[Dict[str, Any]],
+        chunk_offset: int,
+        total_videos: int,
         log_callback: Optional[Callable[[str], None]] = None
     ) -> Optional[Dict[str, List[Dict[str, Any]]]]:
-        """
-        大模型自主统揽分类：
-        将用户选定的期望文件夹 + 用户的个性化需求 + 视频真实特征，作为完整上下文交由 DeepSeek 一体化决策
-        """
-        if not self.api_key or not videos:
-            return None
-
-        # 用户选定的文件夹列表
-        user_topics_str = "、".join([f"【{t['name']}】" for t in self.selected_topics])
+        """对单个批次 (<=35条) 视频进行 DeepSeek 结构化分类"""
         topics_desc = "\n".join([f"- 【{t['name']}】：关注方向 ({t.get('keywords', '')})" for t in self.selected_topics])
 
-        # 视频列表上下文
         video_items_prompt = []
-        for i, v in enumerate(videos, 1):
+        for i, v in enumerate(chunk_videos, 1):
             tags_str = ", ".join(v.get("tags", [])[:5])
             tags_part = f" | 标签: {tags_str}" if tags_str else ""
             intro_clean = v.get("intro", "").replace("\n", " ")[:60]
@@ -109,23 +102,22 @@ class DualEngineClassifier:
             video_items_prompt.append(f"{i}. [UP: {v.get('owner', '未知')}{tags_part}] 《{v.get('title', '')}》{intro_part}")
 
         context_videos_text = "\n".join(video_items_prompt)
-
         user_req_text = self.user_instruction.strip()
         user_req_prompt = f"【用户提出的特别归档偏好】: \"{user_req_text}\"\n" if user_req_text else ""
 
         system_prompt = """你是一个顶级的个人知识与收藏夹智能组织专家。
-你的任务是：深入理解用户的分类偏好与需求，整体审阅用户的全部待整理视频，将所有视频精准归入最贴合的分类文件夹中。"""
+你的任务是：深入理解用户的分类偏好与需求，整体审阅用户的待整理视频，将所有视频精准归入最贴合的分类文件夹中。"""
 
         user_prompt = f"""【用户已选定的主要文件夹】:
 {topics_desc}
 - 【{self.default_category}】：若确实完全不匹配任何主要分类，可归入此项。
 {user_req_prompt}
-【待整理归档的视频清单 (共 {len(videos)} 个)】:
+【待整理归档的视频清单 (共 {len(chunk_videos)} 个)】:
 {context_videos_text}
 
 【分类执行与输出规范】:
 1. 优先使用用户【已选定的主要文件夹】进行归纳；若用户的【特别归档偏好】有明确指示，必须严格遵守！
-2. 将清单中的每个视频（按序号 1 到 {len(videos)}），分配到对应的分类中，确保不漏掉任何一个视频。
+2. 将清单中的每个视频（按序号 1 到 {len(chunk_videos)}），分配到对应的分类中，确保不漏掉任何一个视频。
 3. 必须且只能输出严格的 JSON 对象（不要添加 ```json 等任何包裹标记），格式如下：
 {{
   "分类名称A": [1, 3],
@@ -142,53 +134,77 @@ class DualEngineClassifier:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "max_tokens": 1200
+            "max_tokens": 2048
         }
-
-        if log_callback:
-            log_callback(f"🤖 正在调用 DeepSeek ({self.model}) 统揽整理 {len(videos)} 条视频...")
 
         try:
             url = f"{self.base_url.rstrip('/')}/chat/completions"
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
-            
+            resp = requests.post(url, headers=headers, json=payload, timeout=35)
             if resp.status_code != 200:
-                if log_callback:
-                    log_callback(f"⚠️ DeepSeek 响应异常 HTTP {resp.status_code}，已无缝回退本地多维引擎")
                 return None
 
             res_json = resp.json()
             raw_text = res_json["choices"][0]["message"].get("content", "").strip()
-            
-            # 清除代码块标记
             cleaned_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
             cleaned_text = re.sub(r"```\s*$", "", cleaned_text, flags=re.MULTILINE).strip()
-            
             json_match = re.search(r"\{.*\}", cleaned_text, re.DOTALL)
             if not json_match:
-                if log_callback:
-                    log_callback("⚠️ 未能解析出有效 JSON 分类结果，已回退本地引擎")
                 return None
 
             result_map = json.loads(json_match.group(0))
-            
-            categorized = {}
+            chunk_categorized: Dict[str, List[Dict[str, Any]]] = {}
             for cat_name, idx_list in result_map.items():
                 cat_videos = []
                 for idx in idx_list:
-                    if isinstance(idx, int) and 1 <= idx <= len(videos):
-                        cat_videos.append(videos[idx - 1])
+                    if isinstance(idx, int) and 1 <= idx <= len(chunk_videos):
+                        cat_videos.append(chunk_videos[idx - 1])
                 if cat_videos:
-                    categorized[cat_name] = cat_videos
-
-            if log_callback:
-                log_callback(f"✨ DeepSeek 成功归纳整理出 {len(categorized)} 个分类文件夹！")
-            return categorized
-
-        except Exception as e:
-            if log_callback:
-                log_callback(f"⚠️ 大模型调用异常: {e}，已自动回退本地引擎")
+                    chunk_categorized[cat_name] = cat_videos
+            return chunk_categorized
+        except Exception:
             return None
+
+    def classify_batch_with_llm(
+        self,
+        videos: List[Dict[str, Any]],
+        log_callback: Optional[Callable[[str], None]] = None
+    ) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+        """
+        大模型自主统揽分类（支持大批量分批切片，最高支持上千个视频无损整理）
+        """
+        if not self.api_key or not videos:
+            return None
+
+        chunk_size = 35
+        total = len(videos)
+        final_categorized: Dict[str, List[Dict[str, Any]]] = {}
+
+        if log_callback:
+            log_callback(f"🤖 正在调用 DeepSeek ({self.model}) 统揽整理 {total} 条视频...")
+
+        for i in range(0, total, chunk_size):
+            chunk = videos[i:i + chunk_size]
+            cur_batch_num = i // chunk_size + 1
+            total_batches = (total + chunk_size - 1) // chunk_size
+
+            if total_batches > 1 and log_callback:
+                log_callback(f"🤖 DeepSeek 正在处理第 [{cur_batch_num}/{total_batches}] 批 (视频 {i+1}~{min(i+len(chunk), total)})...")
+
+            chunk_res = self._classify_single_chunk_llm(chunk, i, total, log_callback)
+            if chunk_res:
+                for cat_name, cat_vids in chunk_res.items():
+                    final_categorized.setdefault(cat_name, []).extend(cat_vids)
+            else:
+                # 若大模型该批超时或失败，无缝使用本地多维加权补充
+                if log_callback:
+                    log_callback(f"⚠️ 第 [{cur_batch_num}/{total_batches}] 批大模型响应异常，该批使用本地多维引擎归类")
+                local_chunk = self.classify_local(chunk)
+                for cat_name, cat_vids in local_chunk.items():
+                    final_categorized.setdefault(cat_name, []).extend(cat_vids)
+
+        if log_callback:
+            log_callback(f"✨ 成功归纳整理出 {len(final_categorized)} 个分类文件夹！")
+        return final_categorized
 
     def classify_local(self, videos: List[Dict[str, Any]], log_callback: Optional[Callable[[str], None]] = None) -> Dict[str, List[Dict[str, Any]]]:
         """本地模式：使用用户选定的主题进行多维加权匹配"""
